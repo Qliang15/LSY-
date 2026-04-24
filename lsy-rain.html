@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LSY ♥</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let W = canvas.width;
+let H = canvas.height;
+
+const CHARS = ['L', 'S', 'Y'];
+const FONT_SIZE = 16;
+let cols = Math.floor(W / FONT_SIZE);
+
+let drops = [];
+function initDrops() {
+  cols = Math.floor(W / FONT_SIZE);
+  drops = [];
+  for (let i = 0; i < cols; i++) {
+    drops.push({
+      y: Math.random() * -H,
+      speed: 0.8 + Math.random() * 1.5,
+      bright: Math.random()
+    });
+  }
+}
+initDrops();
+
+let CX, CY, HEART_SCALE;
+function updateHeartParams() {
+  CX = W / 2;
+  CY = H / 2 - 10;
+  HEART_SCALE = Math.min(W, H) * 0.22;
+}
+updateHeartParams();
+
+function heartPoint(t) {
+  const x = 16 * Math.pow(Math.sin(t), 3);
+  const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
+  return {
+    x: CX + x * (HEART_SCALE / 16),
+    y: CY + y * (HEART_SCALE / 16)
+  };
+}
+
+function insideHeart(px, py) {
+  const nx = (px - CX) / (HEART_SCALE / 16);
+  const ny = (py - CY) / (HEART_SCALE / 16);
+  const fy = -ny;
+  const val = Math.pow(nx*nx + fy*fy - 1, 3) - nx*nx * Math.pow(fy, 3);
+  return val <= 0;
+}
+
+let heartOutlinePoints = [];
+function buildOutline() {
+  heartOutlinePoints = [];
+  for (let t = 0; t < Math.PI * 2; t += 0.012) {
+    heartOutlinePoints.push(heartPoint(t));
+  }
+}
+buildOutline();
+
+let miniHearts = [];
+function buildMiniHearts() {
+  miniHearts = [];
+  const spacing = 18;
+  let accDist = 0;
+  let prev = heartOutlinePoints[0];
+  for (let i = 1; i < heartOutlinePoints.length; i++) {
+    const p = heartOutlinePoints[i];
+    const dx = p.x - prev.x;
+    const dy = p.y - prev.y;
+    const d = Math.sqrt(dx*dx + dy*dy);
+    accDist += d;
+    if (accDist >= spacing) {
+      accDist = 0;
+      miniHearts.push({
+        x: p.x, y: p.y,
+        phase: Math.random() * Math.PI * 2,
+        size: 7 + Math.random() * 4
+      });
+    }
+    prev = p;
+  }
+}
+buildMiniHearts();
+
+let particles = [];
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < 55; i++) {
+    particles.push(makeParticle(true));
+  }
+}
+
+function makeParticle(randomLife) {
+  let px, py, tries = 0;
+  do {
+    px = CX + (Math.random() - 0.5) * HEART_SCALE * 2.1;
+    py = CY + (Math.random() - 0.5) * HEART_SCALE * 1.9;
+    tries++;
+  } while (!insideHeart(px, py) && tries < 120);
+  return {
+    x: px, y: py,
+    vy: -(0.15 + Math.random() * 0.45),
+    size: 3 + Math.random() * 5,
+    life: randomLife ? Math.random() : 0
+  };
+}
+initParticles();
+
+function drawMiniHeart(x, y, size, alpha, color) {
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.fillStyle = color;
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = '#ff1493';
+  ctx.beginPath();
+  let first = true;
+  for (let t = 0; t < Math.PI * 2; t += 0.15) {
+    const hx = x + size * 16/13 * Math.pow(Math.sin(t), 3);
+    const hy = y - size * (13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t)) / 13;
+    if (first) { ctx.moveTo(hx, hy); first = false; }
+    else ctx.lineTo(hx, hy);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function isNearHeartEdge(px, py, threshold) {
+  for (let p of heartOutlinePoints) {
+    const dx = px - p.x;
+    const dy = py - p.y;
+    if (dx*dx + dy*dy < threshold * threshold) return true;
+  }
+  return false;
+}
+
+let frame = 0;
+
+function draw() {
+  frame++;
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.fillRect(0, 0, W, H);
+
+  // --- Rain ---
+  ctx.font = `bold ${FONT_SIZE}px monospace`;
+  for (let i = 0; i < cols; i++) {
+    const x = i * FONT_SIZE;
+    const y = drops[i].y;
+    const char = CHARS[Math.floor(Math.random() * CHARS.length)];
+    const inHeart = insideHeart(x + FONT_SIZE/2, y);
+    const onEdge = !inHeart && isNearHeartEdge(x + FONT_SIZE/2, y, 22);
+
+    if (onEdge) {
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = '#ff69b4';
+      ctx.fillStyle = 'rgba(255, 210, 225, 0.9)';
+      ctx.fillText(char, x, y);
+      ctx.shadowBlur = 0;
+    } else if (inHeart) {
+      if (Math.random() < 0.04) {
+        ctx.fillStyle = 'rgba(255, 140, 170, 0.12)';
+        ctx.fillText(char, x, y);
+      }
+    } else {
+      const bright = drops[i].bright;
+      if (Math.random() < 0.06) {
+        ctx.fillStyle = `rgba(255, 180, 200, ${0.8 + bright * 0.2})`;
+      } else {
+        ctx.fillStyle = `rgba(170, 40, 80, ${0.15 + bright * 0.4 + Math.random() * 0.2})`;
+      }
+      ctx.fillText(char, x, y);
+    }
+
+    drops[i].y += FONT_SIZE * drops[i].speed;
+    if (drops[i].y > H + FONT_SIZE) {
+      drops[i].y = -FONT_SIZE * (1 + Math.random() * 20);
+      drops[i].speed = 0.8 + Math.random() * 1.5;
+      drops[i].bright = Math.random();
+    }
+  }
+
+  // --- Heart outline: all pink mini hearts ---
+  const pulse = 0.88 + 0.12 * Math.sin(frame * 0.04);
+  for (let i = 0; i < miniHearts.length; i++) {
+    const mh = miniHearts[i];
+    const wave = Math.sin(frame * 0.05 + mh.phase);
+    const alpha = 0.7 + 0.3 * wave;
+    const sz = mh.size * (0.88 + 0.18 * wave) * pulse;
+    const color = `rgb(255, ${Math.floor(80 + 80 * Math.abs(Math.sin(i * 0.2)))}, ${Math.floor(140 + 60 * Math.abs(Math.sin(i * 0.15)))})`;
+    drawMiniHeart(mh.x, mh.y, sz, alpha, color);
+  }
+
+  // --- Floating mini hearts inside ---
+  for (let p of particles) {
+    p.y += p.vy;
+    p.life += 0.007;
+    const alpha = Math.sin(p.life * Math.PI) * 0.65;
+    if (!insideHeart(p.x, p.y) || p.life >= 1) {
+      Object.assign(p, makeParticle(false));
+    }
+    drawMiniHeart(p.x, p.y, p.size, alpha, '#ff69b4');
+  }
+
+  // --- LSY text in the center ---
+  const fontSize = Math.floor(HEART_SCALE * 0.52);
+  const textPulse = 0.85 + 0.15 * Math.sin(frame * 0.05);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${fontSize}px 'Georgia', serif`;
+
+  // Outer glow layers
+  ctx.globalAlpha = 0.35 * textPulse;
+  ctx.shadowBlur = 50;
+  ctx.shadowColor = '#ff1493';
+  ctx.fillStyle = '#ff1493';
+  ctx.fillText('LSY', CX, CY);
+
+  ctx.globalAlpha = 0.5 * textPulse;
+  ctx.shadowBlur = 30;
+  ctx.shadowColor = '#ff69b4';
+  ctx.fillStyle = '#ff69b4';
+  ctx.fillText('LSY', CX, CY);
+
+  // Crisp top layer
+  ctx.globalAlpha = 1.0;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = '#ffb6c1';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('LSY', CX, CY);
+
+  ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  W = canvas.width; H = canvas.height;
+  updateHeartParams();
+  buildOutline();
+  buildMiniHearts();
+  initDrops();
+  initParticles();
+});
+
+draw();
+</script>
+</body>
+</html>
